@@ -9,4 +9,4 @@
 # gomobile's native code finds its Java side by name through JNI: the go.Seq runtime and the bound package's classes,
 # including the Listener proxy that carries events back. R8 must neither drop nor rename them.
 -keep class go.** { *; }
--keep class cz.teous.messages.bridge.whatsapp.go.** { *; }
+-keep class cz.teous.messages.bridge.go.** { *; }

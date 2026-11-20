@@ -23,6 +23,8 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
+
+	"cz.teous/messages-bridge/networks/internal/sqlite"
 )
 
 // Listener receives every event from the bridge as its kind and JSON payload (events.go). It is called on
@@ -65,7 +67,7 @@ func Open(dir string, listener Listener) (*Bridge, error) {
 	if err := os.MkdirAll(mediaDir, 0o700); err != nil {
 		return nil, fmt.Errorf("media folder: %w", err)
 	}
-	db, err := openDB(filepath.Join(dir, "wa.db"))
+	db, err := sqlite.Open(filepath.Join(dir, "wa.db"))
 	if err != nil {
 		return nil, err
 	}

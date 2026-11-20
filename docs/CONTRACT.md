@@ -76,7 +76,9 @@ Field names, descriptions and instructions are English fallbacks; Messages label
 field types, in the person's language.
 
 WhatsApp offers `phone` (USER_INPUT for the number, then DISPLAY_CODE with the 8-character pairing code the person
-types into WhatsApp under Linked devices) and `qr` (DISPLAY_QR, renewed every 20 seconds or so).
+types into WhatsApp under Linked devices) and `qr` (DISPLAY_QR, renewed every 20 seconds or so). Signal offers only
+`qr` (DISPLAY_QR, an `sgnl://linkdevice` link renewed every 45 seconds), which Signal on another phone has to scan
+(`OVERVIEW.md`, Signal).
 
 ### Sending
 

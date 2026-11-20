@@ -9,9 +9,10 @@ import cz.teous.messages.bridge.contract.Message
 import cz.teous.messages.bridge.contract.NetworkInfo
 import cz.teous.messages.bridge.core.Connector
 import cz.teous.messages.bridge.core.ConnectorSink
+import cz.teous.messages.bridge.core.GoEvents
 import cz.teous.messages.bridge.core.Outgoing
-import cz.teous.messages.bridge.whatsapp.go.whatsapp.Bridge
-import cz.teous.messages.bridge.whatsapp.go.whatsapp.Whatsapp
+import cz.teous.messages.bridge.go.whatsapp.Bridge
+import cz.teous.messages.bridge.go.whatsapp.Whatsapp
 import org.json.JSONObject
 import java.io.File
 
@@ -93,7 +94,7 @@ class WhatsAppConnector(private val dir: File, private val sink: ConnectorSink) 
         val id = if (file == null) {
             go.sendText(chatId, out.text ?: "")
         } else {
-            val kind = WhatsAppEvents.mediaKind(out.kind) ?: throw UnsupportedOperationException("WhatsApp can't send this kind")
+            val kind = GoEvents.mediaKind(out.kind) ?: throw UnsupportedOperationException("WhatsApp can't send this kind")
             go.sendMedia(chatId, file.path, kind, out.mime ?: "application/octet-stream", out.text ?: "", out.fileName ?: "", out.durationS.toLong())
         }
         // WhatsApp doesn't echo what this device sent, so the sent message goes into history from here.

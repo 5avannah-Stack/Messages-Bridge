@@ -3,6 +3,7 @@ package cz.teous.messages.bridge.whatsapp
 import cz.teous.messages.bridge.contract.AccountState
 import cz.teous.messages.bridge.contract.Chat
 import cz.teous.messages.bridge.contract.Message
+import cz.teous.messages.bridge.core.GoEvents
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -41,17 +42,17 @@ class WhatsAppEventsTest {
         assertTrue(m.fromMe)
         assertNull(m.senderId)
         assertEquals("A1", m.replyToId)
-        assertEquals(Message.KIND_OTHER, WhatsAppEvents.kind("poll"))
+        assertEquals(Message.KIND_OTHER, GoEvents.kind("poll"))
     }
 
     @Test
     fun chatsKeepTheirUnreadUnlessTold() {
-        val live = WhatsAppEvents.chat(JSONObject("""{"jid":"10000000002@s.whatsapp.net","name":"Synthetic Friend","phone":"10000000002","group":false,"lastMs":5,"unread":-1}"""))
+        val live = WhatsAppEvents.chat(JSONObject("""{"id":"10000000002@s.whatsapp.net","name":"Synthetic Friend","phone":"10000000002","group":false,"lastMs":5,"unread":-1}"""))
         assertEquals(-1, live.unread)
         assertEquals(Chat.TYPE_DIRECT, live.type)
         assertEquals("10000000002", live.phone)
         assertTrue(live.endToEnd)
-        val group = WhatsAppEvents.chat(JSONObject("""{"jid":"120363000000000001@g.us","group":true,"lastMs":0,"unread":3}"""))
+        val group = WhatsAppEvents.chat(JSONObject("""{"id":"120363000000000001@g.us","group":true,"lastMs":0,"unread":3}"""))
         assertEquals(Chat.TYPE_GROUP, group.type)
         assertEquals(3, group.unread)
         assertNull(group.name)
@@ -62,7 +63,7 @@ class WhatsAppEventsTest {
         assertEquals(AccountState.CONNECTED, WhatsAppEvents.state(JSONObject("""{"state":"connected"}""")))
         assertEquals(AccountState.BAD_CREDENTIALS, WhatsAppEvents.state(JSONObject("""{"state":"logged_out","reason":"401"}""")))
         assertEquals(AccountState.TRANSIENT_DISCONNECT, WhatsAppEvents.state(JSONObject("""{"state":"disconnected"}""")))
-        assertEquals("voice", WhatsAppEvents.mediaKind(Message.KIND_VOICE))
-        assertNull(WhatsAppEvents.mediaKind(Message.KIND_STICKER))
+        assertEquals("voice", GoEvents.mediaKind(Message.KIND_VOICE))
+        assertNull(GoEvents.mediaKind(Message.KIND_STICKER))
     }
 }

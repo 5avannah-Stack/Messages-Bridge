@@ -66,15 +66,26 @@ android {
 }
 
 /*
- * WhatsApp is the Go module in networks/whatsapp, bound into an AAR with gomobile. Go comes from PATH, or from the
- * environment variable GO; gomobile and gobind are built from the module's own go.mod, so their versions are pinned.
- * Releases carry arm64 only; -PgoTargets=android/arm64,android/amd64 adds the emulator's ABI.
+ * WhatsApp and Signal are packages of the Go module in networks, bound together into one AAR with gomobile, since an
+ * app can carry only one Go runtime. Go comes from PATH, or from the environment variable GO; gomobile and gobind are
+ * built from the module's own go.mod, so their versions are pinned. Signal links libsignal, Signal's Rust library,
+ * which networks/libsignal.sh builds first for each target (rustup, protoc and the SDK's CMake). Releases carry arm64
+ * only; -PgoTargets=android/arm64,android/amd64 adds the emulator's ABI.
  */
-val goModule = rootProject.file("../networks/whatsapp")
+val goModule = rootProject.file("../networks")
 val goBuild = layout.buildDirectory.dir("go")
 val goExe = providers.environmentVariable("GO").orElse("go")
 val goTargets = providers.gradleProperty("goTargets").orElse("android/arm64")
 val exe = if (System.getProperty("os.name").startsWith("Windows")) ".exe" else ""
+val rustTargets = goTargets.map { targets ->
+    targets.split(",").map {
+        when (it.trim()) {
+            "android/arm64" -> "aarch64-linux-android"
+            "android/amd64" -> "x86_64-linux-android"
+            else -> throw GradleException("no libsignal target for $it")
+        }
+    }
+}
 
 val goMobileTools = tasks.register<Exec>("goMobileTools") {
     val bin = goBuild.map { it.dir("bin") }
@@ -84,10 +95,25 @@ val goMobileTools = tasks.register<Exec>("goMobileTools") {
     commandLine(goExe.get(), "build", "-o", bin.get().asFile.path + File.separator, "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind")
 }
 
-val whatsappAar = tasks.register<Exec>("whatsappAar") {
-    dependsOn(goMobileTools)
-    val aar = goBuild.map { it.file("whatsapp.aar") }
-    inputs.files(fileTree(goModule) { include("*.go", "go.mod", "go.sum") })
+val sdkCmake = androidComponents.sdkComponents.sdkDirectory.map { sdk ->
+    sdk.asFile.resolve("cmake").listFiles()?.filter { it.isDirectory }?.maxByOrNull { it.name }?.resolve("bin")
+}
+
+val libsignal = tasks.register<Exec>("libsignal") {
+    inputs.files(File(goModule, "libsignal.sh"), File(goModule, "signalbridge/libsignal.version"))
+    inputs.property("targets", rustTargets)
+    outputs.files(rustTargets.map { ts -> ts.map { File(goModule, ".libsignal/$it/libsignal_ffi.a") } })
+    workingDir = goModule
+    val path = listOfNotNull(sdkCmake.get()?.path, System.getenv("PATH"))
+    environment("PATH", path.joinToString(File.pathSeparator))
+    environment("ANDROID_NDK_HOME", androidComponents.sdkComponents.ndkDirectory.get().asFile.path)
+    commandLine(listOf("bash", "libsignal.sh") + rustTargets.get())
+}
+
+val networksAar = tasks.register<Exec>("networksAar") {
+    dependsOn(goMobileTools, libsignal)
+    val aar = goBuild.map { it.file("networks.aar") }
+    inputs.files(fileTree(goModule) { include("**/*.go", "go.mod", "go.sum"); exclude(".libsignal/**") })
     inputs.property("targets", goTargets)
     outputs.file(aar)
     workingDir = goModule
@@ -98,16 +124,16 @@ val whatsappAar = tasks.register<Exec>("whatsappAar") {
     environment("ANDROID_HOME", androidComponents.sdkComponents.sdkDirectory.get().asFile.path)
     environment("ANDROID_NDK_HOME", androidComponents.sdkComponents.ndkDirectory.get().asFile.path)
     environment("GOTOOLCHAIN", "local")
-    // -trimpath and -s -w keep build paths and symbols out. Kotlin sees the package as
-    // cz.teous.messages.bridge.whatsapp.go.whatsapp (gomobile appends the Go package's name).
+    // -trimpath and -s -w keep build paths and symbols out. Kotlin sees the packages as cz.teous.messages.bridge.go.whatsapp
+    // and cz.teous.messages.bridge.go.signalbridge (gomobile appends each Go package's name).
     commandLine(
         File(bin, "gomobile$exe").path, "bind", "-target=${goTargets.get()}", "-androidapi", "29", "-trimpath", "-ldflags=-s -w",
-        "-javapkg", "cz.teous.messages.bridge.whatsapp.go", "-o", aar.get().asFile.path, ".",
+        "-javapkg", "cz.teous.messages.bridge.go", "-o", aar.get().asFile.path, "./whatsapp", "./signalbridge",
     )
 }
 
 dependencies {
-    implementation(files(goBuild.map { it.file("whatsapp.aar") }).builtBy(whatsappAar))
+    implementation(files(goBuild.map { it.file("networks.aar") }).builtBy(networksAar))
     implementation(project(":contract"))
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
