@@ -153,6 +153,7 @@ func (b *Bridge) onMessage(ctx context.Context, threadID string, msg *slidetypes
 	}
 	m.Media = url != ""
 	b.setLastMessage(threadID, m.ID)
+	b.noteNewest(threadID, m.Timestamp)
 	b.emit("chat", chat{ID: threadID, LastMs: m.Timestamp, Unread: -1})
 	b.emit("message", m)
 	if url != "" {
@@ -269,14 +270,21 @@ func xmaText(c *slidetypes.MessageContentXMA) string {
 	return strings.Join(parts, "\n")
 }
 
-// onMailbox reports the chats of the inbox's first page, newest first, without their messages: the inbox carries only
-// stubs of those.
+// onMailbox reports the chats of the inbox's first page that are new or changed, without their messages: the inbox
+// carries only stubs of those, and backfill.go reads them.
 func (b *Bridge) onMailbox(mb *slidetypes.Mailbox) {
 	if mb == nil {
 		return
 	}
+	b.mu.Lock()
+	b.inboxAt = time.Now()
+	b.mu.Unlock()
 	for _, edge := range mb.ThreadsByFolder.Edges {
-		if t := edge.Node.AsIGDirectThread; t != nil {
+		t := edge.Node.AsIGDirectThread
+		if t == nil {
+			continue
+		}
+		if b.thread(t.ID).key == 0 || t.LastActivityTimestampMS.UnixMilli() > b.activity(t.ID) {
 			b.onThread(t)
 		}
 	}
@@ -289,6 +297,7 @@ func (b *Bridge) onThread(t *slidetypes.ThreadInfo) {
 	}
 	_, _ = b.db.Exec(`INSERT INTO bridge_thread (id, long_id, key) VALUES (?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET long_id = excluded.long_id, key = excluded.key`, t.ID, t.ThreadID, t.ThreadKey)
+	b.noteActivity(t.ID, t.LastActivityTimestampMS.UnixMilli())
 	c := chat{ID: t.ID, Group: t.IsGroup || len(t.Users) > 1, LastMs: t.LastActivityTimestampMS.UnixMilli(), Unread: -1}
 	if c.Group {
 		c.Name = t.ThreadTitle

@@ -34,6 +34,10 @@ No permanent foreground service. A network connects:
 
 Otherwise it disconnects and shows as asleep. Muted chats wait for the catch-up.
 
+History is fetched ahead of time, while a network is connected, never when the person scrolls (`phone-apps`, Content
+is there when a screen opens): each connection runs one short pass per network, paced, that stops when the bridge
+disconnects and carries on at the next connection. Messages reads it from the bridge's store with `history()`.
+
 ## WhatsApp
 
 A linked device on [whatsmeow](https://github.com/tulir/whatsmeow), as in Messages' spike
@@ -46,12 +50,19 @@ every Go network).
   "Messages".
 - **Receiving:** text, images, video, audio, voice notes, files and stickers, with replies' targets. Live media
   downloads to `media/` after its message; media from history sync isn't downloaded. Reactions, edits and deletes are
-  skipped for now. A person's chat takes their contact or push name; history sync brings chats with their unread counts
-  and recent messages.
+  skipped for now. A person's chat takes their contact or push name.
+- **History:** WhatsApp sends a linked device its history once, right after pairing: chats with their unread counts and
+  recent messages. For more, the bridge asks the person's phone, the way WhatsApp Web does (`backfill.go`, whatsmeow's
+  history sync request): on each connection, once history syncs have been quiet for 10 seconds, up to 5 of the 10 most
+  recent chats that hold fewer than 100 messages each get one request for the 50 before their oldest, 4 to 8 seconds
+  apart. Each request wakes the phone with a push. The phone answers when it's online, often at a later connection;
+  an unanswered request is repeated after 6 hours, at most 3 times, and an answer with nothing older ends that chat's
+  history. Media in history isn't downloaded.
 - **Sending:** text, and images, video, audio, voice notes and files up to 100 MB. WhatsApp doesn't echo what this device
   sends, so the connector adds the sent message to history itself.
 - **Read:** read receipts go out for others' messages; reads on the person's other devices clear the chat here.
-- **Store:** whatsmeow's keys and sessions in `wa.db` (pure-Go SQLite, modernc), in the network's folder.
+- **Store:** whatsmeow's keys and sessions in `wa.db` (pure-Go SQLite, modernc), in the network's folder, with the
+  bridge's `bridge_history`: each chat's oldest message, message count and pending requests.
 
 ## Signal
 
@@ -70,7 +81,9 @@ which `networks/libsignal.sh` builds for each ABI at the version mautrix-signal 
   one.
 - **History:** while linking, Signal asks the person whether to transfer their message history. If they agree, the
   phone uploads an archive, and the bridge waits for it (up to an hour, while connected) and adds each chat's newest
-  1,000 messages as history; media in it isn't downloaded. If they don't, chats start with what arrives live.
+  1,000 messages as history; media in it isn't downloaded. If they don't, chats start with what arrives live. That
+  archive is the only history a linked device ever gets: Signal's servers keep no messages once delivered, and Signal
+  has no request to the phone for more, so there is nothing to fetch later.
 - **Receiving:** text, long texts (over 2 KiB, which Signal sends as an attachment), images, video, audio, voice notes,
   files and stickers, with replies' targets. A message with several attachments arrives as one message per attachment,
   the text on the first. Contacts, polls and payments show as a line saying what they are. Reactions, edits, deletes,
@@ -96,8 +109,13 @@ encrypted: Meta removed the opt-in encryption on 8 May 2026, so the chats show a
   (`waitForUrl`) sends its cookies: `sessionid`, `csrftoken` and `ds_user_id`, and `rur`, `shbid`, `shbts`, `mid` and
   `ig_did` when set, the same as Messages' server bridge. The bridge checks them by loading the inbox once.
 - **Chats:** the inbox's first page arrives at login, with each person's name and handle or each group's title. A chat
-  first heard of later is looked up when its first message comes. No history of messages: the inbox carries only stubs
-  of them.
+  first heard of later is looked up when its first message comes.
+- **History:** Instagram gives a web session no messages, so the bridge reads them as Instagram's web client does, a
+  page of 20 at a time (`backfill.go`). Each connection reads the inbox's first page (skipped when it was read in the
+  last two minutes, as right after a login); each of the 20 most recent chats that's new or has activity newer than the
+  newest message here gets its newest page, then the 10 most recent get older pages until each holds 100 messages, as
+  Messages' server bridge keeps. Requests go one at a time, 2 to 5 seconds apart at random. Media in history isn't
+  downloaded.
 - **Receiving:** text, photos, videos, voice notes, GIFs and stickers, and replies' targets. An album shows its first
   photo or video with a line saying how many more. View-once photos and videos stay in Instagram; shared posts, reels
   and links show as a line with their title and link. Reactions, edits, unsends and group changes are skipped: the
@@ -109,8 +127,9 @@ encrypted: Meta removed the opt-in encryption on 8 May 2026, so the chats show a
   the chat here.
 - **Logout** forgets the session on the phone. Instagram keeps it until it expires or the person ends it under
   Accounts Center › Password and security › Where you're logged in, as with mautrix-meta.
-- **Store:** the session's cookies, the client's position in Instagram's event stream, and each thread's three ids
-  (Instagram's calls each want a different one) in `instagram.db`, in the network's folder.
+- **Store:** the session's cookies, the client's position in Instagram's event stream, each thread's three ids
+  (Instagram's calls each want a different one) and how far its history has been read (`bridge_backfill`) in
+  `instagram.db`, in the network's folder.
 
 ## Licences
 

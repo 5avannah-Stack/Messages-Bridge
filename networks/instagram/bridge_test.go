@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"go.mau.fi/mautrix-meta/pkg/instameow/slidetypes"
 	"go.mau.fi/mautrix-meta/pkg/messagix/cookies"
 	"go.mau.fi/mautrix-meta/pkg/messagix/types"
+	"go.mau.fi/util/jsontime"
 )
 
 // Everything here is synthetic: made-up ids, usernames and cookie values, and a fake client. Nothing reaches
@@ -74,6 +77,9 @@ type fake struct {
 	medias     []*slidetypes.SendMediaRequest
 	reads      []*slidetypes.MarkReadRequest
 	validation []*slidetypes.MarkReadRequest
+	mailboxes  int
+	pages      []string // the cursor of each older page asked for
+	history    *history // when set, threads carry messages and pages come from it
 }
 
 func newFake() *fake { return &fake{connected: make(chan struct{}, 4)} }
@@ -84,7 +90,7 @@ func (f *fake) LoadIndex(context.Context) (*types.PolarisViewer, *slidetypes.Mai
 	}
 	f.seq = 5
 	mb := &slidetypes.Mailbox{UQSeqID: 5}
-	mb.ThreadsByFolder.Edges = []slidetypes.Node[slidetypes.WrappedThreadInfo]{{Node: slidetypes.WrappedThreadInfo{AsIGDirectThread: thread()}}}
+	mb.ThreadsByFolder.Edges = []slidetypes.Node[slidetypes.WrappedThreadInfo]{{Node: slidetypes.WrappedThreadInfo{AsIGDirectThread: f.thread()}}}
 	v := &types.PolarisViewer{ID: "1"}
 	v.Data.Username = "synthetic.self"
 	return v, mb, nil
@@ -101,11 +107,38 @@ func (f *fake) Disconnect()                     {}
 func (f *fake) SetEventHandler(h func(context.Context, slidetypes.ClientEvent) error) {
 	f.handler = h
 }
+func (f *fake) GetMailbox(context.Context) (*slidetypes.MailboxResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.mailboxes++
+	mb := &slidetypes.Mailbox{}
+	mb.ThreadsByFolder.Edges = []slidetypes.Node[slidetypes.WrappedThreadInfo]{{Node: slidetypes.WrappedThreadInfo{AsIGDirectThread: f.thread()}}}
+	return &slidetypes.MailboxResponse{Mailbox: mb}, nil
+}
 func (f *fake) GetThread(context.Context, *slidetypes.GetThreadInfoRequest) (*slidetypes.ThreadInfoResponse, error) {
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.threads++
-	f.mu.Unlock()
-	return &slidetypes.ThreadInfoResponse{ThreadInfo: slidetypes.WrappedThreadInfo{AsIGDirectThread: thread()}}, nil
+	t := f.thread()
+	if f.history != nil {
+		t.SlideMessages = f.history.page("")
+	}
+	return &slidetypes.ThreadInfoResponse{ThreadInfo: slidetypes.WrappedThreadInfo{AsIGDirectThread: t}}, nil
+}
+func (f *fake) PaginateMessages(_ context.Context, req *slidetypes.PaginateMessagesRequest) (*slidetypes.PaginateMessagesResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pages = append(f.pages, *req.AfterCursor)
+	resp := &slidetypes.PaginateMessagesResponse{}
+	resp.ThreadInfo.AsIGDirectThread = &slidetypes.MessagesOnlyThread{ID: req.ThreadID, Messages: f.history.page(*req.AfterCursor)}
+	return resp, nil
+}
+func (f *fake) thread() *slidetypes.ThreadInfo {
+	t := thread()
+	if f.history != nil {
+		t.LastActivityTimestampMS = jsontime.UnixMilliString{Time: time.UnixMilli(f.history.newest)}
+	}
+	return t
 }
 func (f *fake) SendMessage(_ context.Context, req *slidetypes.SendTextRequest) (*slidetypes.SendTextResponse, error) {
 	f.mu.Lock()
@@ -135,6 +168,32 @@ func thread() *slidetypes.ThreadInfo {
 	}
 }
 
+// history is a synthetic thread of total messages, one a second up to newest, served newest first in pages of
+// pageSize; a page's cursor is the index of its first message.
+type history struct {
+	total  int
+	newest int64
+}
+
+func (h *history) page(cursor string) *slidetypes.SlideMessages {
+	from := 0
+	if cursor != "" {
+		from, _ = strconv.Atoi(cursor)
+	}
+	page := &slidetypes.SlideMessages{}
+	for i := from; i < h.total && i < from+pageSize; i++ {
+		page.Edges = append(page.Edges, slidetypes.Node[*slidetypes.Message]{Node: &slidetypes.Message{
+			ID: fmt.Sprintf("mid.history%03d", i), SenderFBID: friend,
+			TimestampMS: jsontime.UnixMilliString{Time: time.UnixMilli(h.newest - int64(i)*1000)},
+			Content:     slidetypes.MessageContentWrapper{Content: &slidetypes.MessageContentText{TextBody: "synthetic"}},
+		}})
+	}
+	if next := from + pageSize; next < h.total {
+		page.PageInfo = slidetypes.PageInfo{HasNextPage: true, EndCursor: strconv.Itoa(next)}
+	}
+	return page
+}
+
 func stub[T any](t *testing.T, v *T, with T) {
 	old := *v
 	*v = with
@@ -151,6 +210,8 @@ func open(t *testing.T) (*Bridge, *recorder, *fake, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// History waits until a test lets it run (TestHistoryIsReadAheadOfTime).
+	b.pace = func(ctx context.Context) bool { <-ctx.Done(); return false }
 	t.Cleanup(func() { b.Close() })
 	return b, r, f, dir
 }
@@ -352,5 +413,106 @@ func TestConnectionStates(t *testing.T) {
 	f.handler(context.Background(), &slidetypes.SeqIDUpdate{SeqID: 9})
 	if b.meta(metaSeqID) != "9" {
 		t.Fatal("the position is kept for the next connection")
+	}
+}
+
+func TestHistoryIsReadAheadOfTime(t *testing.T) {
+	b, r, f, _ := open(t)
+	f.history = &history{total: 130, newest: 1_800_000_000_000}
+	var paced int
+	var pacedMu sync.Mutex
+	b.pace = func(ctx context.Context) bool {
+		pacedMu.Lock()
+		paced++
+		pacedMu.Unlock()
+		return ctx.Err() == nil
+	}
+	if _, err := b.LoginCookies(syntheticCookies); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	// The newest page, then older pages up to the cap, all as history and without media.
+	for i := 0; i < backfillCap; i++ {
+		var m message
+		r.nextOf(t, "message", &m)
+		if m.ID != fmt.Sprintf("mid.history%03d", i) || !m.History || m.Media || m.Chat != threadID || m.Text != "synthetic" {
+			t.Fatalf("message %d: %+v", i, m)
+		}
+	}
+	waitFor(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.pages) == 4
+	})
+	b.Disconnect()
+	idle(t, b)
+	if f.threads != 1 || f.mailboxes != 0 || strings.Join(f.pages, ",") != "20,40,60,80" {
+		t.Fatalf("thread %d, inbox %d, pages %v: the login's inbox is fresh, and the cap stops the pages", f.threads, f.mailboxes, f.pages)
+	}
+	if paced != 5 {
+		t.Fatalf("%d of 5 requests paced", paced)
+	}
+	if b.thread(threadID).lastMsg != "mid.history000" {
+		t.Fatal("read receipts go up to the newest message history brought")
+	}
+
+	// A later wake with nothing new reads only the inbox.
+	b.inboxAt = time.Time{}
+	b.backfill(context.Background(), f)
+	if f.mailboxes != 1 || f.threads != 1 || len(f.pages) != 4 {
+		t.Fatalf("idle wake: inbox %d, thread %d, pages %d", f.mailboxes, f.threads, len(f.pages))
+	}
+	// A chat with news gets its newest page again, and its older pages stay where they were.
+	f.history.newest += 5_000
+	b.inboxAt = time.Time{}
+	b.backfill(context.Background(), f)
+	if f.mailboxes != 2 || f.threads != 2 || len(f.pages) != 4 {
+		t.Fatalf("wake with news: inbox %d, thread %d, pages %d", f.mailboxes, f.threads, len(f.pages))
+	}
+	// A pass ends with the connection.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.history.newest += 5_000
+	b.inboxAt = time.Time{}
+	b.backfill(ctx, f)
+	if f.mailboxes != 2 {
+		t.Fatal("nothing is asked after a disconnect")
+	}
+}
+
+func TestHistoryStopsAtTheFirstMessage(t *testing.T) {
+	b, _, f := loggedIn(t)
+	b.Disconnect()
+	idle(t, b)
+	f.history = &history{total: 30, newest: 1_800_000_000_000}
+	b.pace = func(ctx context.Context) bool { return ctx.Err() == nil }
+	b.inboxAt = time.Time{}
+	b.backfill(context.Background(), f)
+	b.backfill(context.Background(), f)
+	if f.threads != 1 || strings.Join(f.pages, ",") != "20" {
+		t.Fatalf("thread %d, pages %v", f.threads, f.pages)
+	}
+}
+
+// idle waits for the connection's history pass to end.
+func idle(t *testing.T, b *Bridge) {
+	t.Helper()
+	waitFor(t, func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return !b.backfilling
+	})
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

@@ -19,7 +19,13 @@
 - One branch, `main`, and full releases, since Messages' betas don't need a bridge beta yet.
 - Noir, as Messages.
 - WhatsApp's store uses modernc's pure-Go SQLite, which builds and tests the same everywhere; mattn's cgo SQLite is smaller (about 0.9 MB) and stays a build tag (`cgosqlite`) until its tests run on the PC.
-- Media from WhatsApp's history sync isn't downloaded; only live media is.
+- Media from history isn't downloaded, on any network; only live media is.
+- **History ahead of time** (`phone-apps`, Content is there when a screen opens). Each network's history is fetched in
+  the background while it's connected, so Messages never waits on a network while the person scrolls. Instagram reads
+  pages as its web client does, for the 20 most recent chats and back to 100 messages in the 10 most recent, 2 to 5
+  seconds apart; WhatsApp asks the person's phone with whatsmeow's history sync request, up to 5 requests of 50
+  messages a connection for the 10 most recent chats, back to 100 messages, since each request wakes the phone. Signal
+  stays with the linking transfer: its servers keep no messages and it has no request for more (`OVERVIEW.md`).
 - **Signal on signalmeow**, mautrix-signal's Go client, without its Matrix layer, rather than libsignal's Java bindings
   with a Signal service client. signalmeow is a whole client (linking, Signal's two sockets, sealed sender, groups,
   attachments, contact and storage sync, the history transfer) kept current with Signal's servers by whatsmeow's

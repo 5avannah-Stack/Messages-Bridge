@@ -1,7 +1,8 @@
 // Package whatsapp is Messages Bridge's WhatsApp: a linked device on whatsmeow, bound into the Android app with
 // gomobile (docs/OVERVIEW.md). Kotlin's WhatsAppConnector sees only what is exported here. gomobile binds strings,
 // numbers, bools, []byte, exported structs and callback interfaces, but no slices of structs, so lists and events
-// cross as JSON (events.go). The app keeps chats and history itself; this package keeps only whatsmeow's store.
+// cross as JSON (events.go). The app keeps chats and history itself; this package keeps whatsmeow's store and, for
+// asking the phone for older history, each chat's oldest message (backfill.go).
 //
 // It never logs message text, numbers or names: whatsmeow's own logger stays off.
 package whatsapp
@@ -44,10 +45,19 @@ type Bridge struct {
 	// download and upload reach WhatsApp's media servers; tests replace them.
 	download func(ctx context.Context, msg whatsmeow.DownloadableMessage) ([]byte, error)
 	upload   func(ctx context.Context, data []byte, kind whatsmeow.MediaType) (whatsmeow.UploadResponse, error)
+	// requestHistory asks the person's phone for count messages before one; wait sleeps between requests. Tests
+	// replace them.
+	requestHistory func(ctx context.Context, before *types.MessageInfo, count int) error
+	wait           func(ctx context.Context, d time.Duration) bool
+	settle         time.Duration
 
 	mu       sync.Mutex
 	qrSeen   chan struct{}      // closed on the login socket's first QR event, which PairPhone waits for
 	qrCancel context.CancelFunc // stops a QR login
+
+	backfillCancel context.CancelFunc // ends this connection's history requests
+	connectedAt    time.Time
+	historyAt      time.Time // the last history sync
 }
 
 var (
@@ -82,10 +92,28 @@ func Open(dir string, listener Listener) (*Bridge, error) {
 		db.Close()
 		return nil, fmt.Errorf("device: %w", err)
 	}
-	b := &Bridge{db: db, container: container, listener: listener, mediaDir: mediaDir}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS bridge_history (
+			chat           TEXT PRIMARY KEY,
+			activity       INTEGER NOT NULL DEFAULT 0, -- the chat's last activity, in ms
+			oldest_id      TEXT NOT NULL DEFAULT '',   -- the oldest message here, which the next request starts from
+			oldest_from_me INTEGER NOT NULL DEFAULT 0,
+			oldest_ms      INTEGER NOT NULL DEFAULT 0,
+			count          INTEGER NOT NULL DEFAULT 0, -- messages here
+			unanswered     INTEGER NOT NULL DEFAULT 0, -- requests the phone hasn't answered
+			asked_at       INTEGER NOT NULL DEFAULT 0, -- the last request, in ms
+			done           INTEGER NOT NULL DEFAULT 0  -- the phone has nothing older
+		)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("bridge tables: %w", err)
+	}
+	b := &Bridge{db: db, container: container, listener: listener, mediaDir: mediaDir, wait: wait, settle: settle}
 	b.cli = whatsmeow.NewClient(device, nil)
 	b.download = b.cli.Download
 	b.upload = b.cli.Upload
+	b.requestHistory = func(ctx context.Context, before *types.MessageInfo, count int) error {
+		_, err := b.cli.SendPeerMessage(ctx, b.cli.BuildHistorySyncRequest(before, count))
+		return err
+	}
 	b.cli.AddEventHandler(b.handle)
 	return b, nil
 }
@@ -113,17 +141,23 @@ func (b *Bridge) Connect() error {
 }
 
 // Disconnect closes the socket and keeps the pairing.
-func (b *Bridge) Disconnect() { b.cli.Disconnect() }
+func (b *Bridge) Disconnect() {
+	b.stopBackfill()
+	b.cli.Disconnect()
+}
 
 // Close disconnects and closes the store. The Bridge can't be used afterwards.
 func (b *Bridge) Close() error {
 	b.CancelLogin()
-	b.cli.Disconnect()
+	b.Disconnect()
 	return b.container.Close()
 }
 
 // Logout unlinks this device from the person's WhatsApp and wipes its keys.
-func (b *Bridge) Logout() error { return b.cli.Logout(context.Background()) }
+func (b *Bridge) Logout() error {
+	b.stopBackfill()
+	return b.cli.Logout(context.Background())
+}
 
 // PairPhone links by phone-number code: it connects, waits for the login socket, and returns the 8-character code the
 // person types into WhatsApp on their main phone (Linked devices, Link with phone number). WhatsApp also shows them a
