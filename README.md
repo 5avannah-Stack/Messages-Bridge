@@ -32,5 +32,6 @@ cd android && ./gradlew testDebugUnitTest assembleDebug
 
 ## Licence
 
-GNU Affero General Public License v3.0 only (`LICENSE`). Each Go dependency keeps its own licence; see
+GNU Affero General Public License v3.0 only (`LICENSE`), except `android/contract`, which is MIT
+(`android/contract/LICENSE`) so that Messages can copy it. Each Go dependency keeps its own licence; see
 `docs/OVERVIEW.md`, Licences.
