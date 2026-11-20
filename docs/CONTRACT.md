@@ -72,6 +72,9 @@ A login is a series of `LoginStep`s, as bridgev2's:
   failure arrive as `TYPE_LOGIN` events with the same `loginId`.
 - `TYPE_COMPLETE`: logged in as `accountId`. `TYPE_FAILED`: `error` says why; start again.
 
+Field names, descriptions and instructions are English fallbacks; Messages labels a step by its network, flow, step id and
+field types, in the person's language.
+
 WhatsApp offers `phone` (USER_INPUT for the number, then DISPLAY_CODE with the 8-character pairing code the person
 types into WhatsApp under Linked devices) and `qr` (DISPLAY_QR, renewed every 20 seconds or so).
 

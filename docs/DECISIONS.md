@@ -18,4 +18,6 @@
 - Package `cz.teous.messages.bridge`, `minSdk` 29, with its own signing key.
 - One branch, `main`, and full releases, since Messages' betas don't need a bridge beta yet.
 - Noir, as Messages.
+- WhatsApp's store uses modernc's pure-Go SQLite, which builds and tests the same everywhere; mattn's cgo SQLite is smaller (about 0.9 MB) and stays a build tag (`cgosqlite`) until its tests run on the PC.
+- Media from WhatsApp's history sync isn't downloaded; only live media is.
 - Staying connected (from the WhatsApp spike): wake on the network's own notification, a half-hourly catch-up, and connected while Messages is on screen; no permanent foreground service.
