@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Which of the two bridge services is enabled: knownSigner exists from API 31 (values-v31). -->
+<resources>
+    <bool name="knownSigner">false</bool>
+    <bool name="noKnownSigner">true</bool>
+</resources>

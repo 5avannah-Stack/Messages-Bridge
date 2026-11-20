@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Messages Bridge</string>
+    <string name="messages" translatable="false">Messages</string>
+    <string name="source_url" translatable="false">https://github.com/5avannah-Stack/Messages-Bridge</string>
+    <string name="licence" translatable="false">AGPL-3.0</string>
+
+    <string name="no_networks">No networks in this version</string>
+    <string name="state_logged_out">Not logged in · log in from Messages</string>
+    <string name="state_connecting">Connecting…</string>
+    <string name="state_connected">Connected</string>
+    <string name="state_sleeping">Asleep until news arrives</string>
+    <string name="state_transient">Connection lost, trying again</string>
+    <string name="state_bad_credentials">Logged out by the network · log in again from Messages</string>
+    <string name="state_error">Something went wrong</string>
+
+    <string name="messages_missing">Not installed · get it from TStore</string>
+    <string name="messages_foreign">This copy of Messages isn\'t signed by its maker, so the bridge won\'t talk to it</string>
+    <string name="messages_ready">Ready</string>
+    <string name="messages_attached">Connected</string>
+
+    <string name="wake_title">Wake on notifications</string>
+    <string name="wake_on">On</string>
+    <string name="wake_off">Off · new chats arrive only every half hour</string>
+    <string name="wake_allow">Allow</string>
+
+    <string name="source">Source code</string>
+</resources>

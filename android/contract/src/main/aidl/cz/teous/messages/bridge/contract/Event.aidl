@@ -9,8 +9,9 @@ import cz.teous.messages.bridge.contract.Message;
 import cz.teous.messages.bridge.contract.SendResult;
 
 /**
- * Something that happened, in order. seq grows by one across all networks and survives restarts; the bridge keeps
- * every event until ack() passes it. Only the field for its type is set. A client skips types it doesn't know.
+ * Something that happened, in order. seq grows across all networks and survives restarts; the bridge keeps every
+ * event until ack() passes it. Only the field for its type is set, read when the event is read, so it is the latest
+ * state. A client skips types it doesn't know. TYPE_LOGIN events go only to the listener, with seq 0.
  */
 parcelable Event {
     const int TYPE_ACCOUNT = 1;   // account

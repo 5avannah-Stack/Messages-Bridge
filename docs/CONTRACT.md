@@ -84,8 +84,10 @@ shows the message as sending at once (`teodor-taste`, Sending feels instant), th
 
 ## Events
 
-Everything the bridge hears becomes an `Event` with a `seq` that grows by one across all networks and survives
-restarts. The bridge stores each one until `ack` passes it, so nothing is lost while Messages isn't running.
+Everything the bridge hears becomes an `Event` with a `seq` that grows across all networks and survives restarts. The
+bridge stores each one until `ack` passes it, so nothing is lost while Messages isn't running. A stored event names what
+changed; its chat, message or send is read when Messages reads the event, so it shows the latest state, and an event
+whose data is gone (after a logout) is skipped. `seq` can therefore jump.
 
 | Type | Set field | Meaning |
 |---|---|---|
@@ -95,7 +97,7 @@ restarts. The bridge stores each one until `ack` passes it, so nothing is lost w
 | `TYPE_MEDIA` | `message` | A message's `mediaState` changed. |
 | `TYPE_SEND` | `send` | A `send` ended. |
 | `TYPE_READ` | `chatId`, `messageId` | The chat was read up to there on another device. |
-| `TYPE_LOGIN` | `login` | A login's next step. |
+| `TYPE_LOGIN` | `login` | A login's next step. Pushed to the listener only, with `seq` 0, and never stored, since a stale login step means nothing. |
 
 Delivery:
 
