@@ -387,3 +387,138 @@ func TestContactsCarryTheirNumberAlsoBehindALID(t *testing.T) {
 		t.Fatal("nameOf missed the contact")
 	}
 }
+
+// asks records the bridge's history requests to the phone.
+type asks chan *types.MessageInfo
+
+func (a asks) next(t *testing.T) *types.MessageInfo {
+	t.Helper()
+	select {
+	case info := <-a:
+		return info
+	case <-time.After(5 * time.Second):
+		t.Fatal("no history request")
+		return nil
+	}
+}
+
+func (a asks) none(t *testing.T) {
+	t.Helper()
+	select {
+	case info := <-a:
+		t.Fatalf("unexpected history request before %s", info.ID)
+	default:
+	}
+}
+
+func onDemand(chat types.JID, msgs ...*waWeb.WebMessageInfo) *events.HistorySync {
+	c := &waHistorySync.Conversation{ID: proto.String(chat.String())}
+	for _, m := range msgs {
+		c.Messages = append(c.Messages, &waHistorySync.HistorySyncMsg{Message: m})
+	}
+	return &events.HistorySync{Data: &waHistorySync.HistorySync{
+		SyncType: waHistorySync.HistorySync_ON_DEMAND.Enum(), Conversations: []*waHistorySync.Conversation{c}}}
+}
+
+func webMessage(chat types.JID, id string, fromMe bool, seconds uint64) *waWeb.WebMessageInfo {
+	return &waWeb.WebMessageInfo{
+		Key:              &waCommon.MessageKey{RemoteJID: proto.String(chat.String()), FromMe: proto.Bool(fromMe), ID: proto.String(id)},
+		Message:          &waE2E.Message{Conversation: proto.String("synthetic")},
+		MessageTimestamp: proto.Uint64(seconds),
+	}
+}
+
+func TestOlderHistoryIsAskedOfThePhone(t *testing.T) {
+	b, r, _ := open(t)
+	pairOffline(t, b)
+	asked := make(asks, 8)
+	b.requestHistory = func(_ context.Context, before *types.MessageInfo, count int) error {
+		if count != requestSize {
+			t.Errorf("asked for %d", count)
+		}
+		asked <- before
+		return nil
+	}
+	b.wait = func(ctx context.Context, _ time.Duration) bool { return ctx.Err() == nil }
+	b.settle = 0
+	status := types.NewJID("status", types.BroadcastServer)
+	b.handle(&events.HistorySync{Data: &waHistorySync.HistorySync{Conversations: []*waHistorySync.Conversation{
+		{ID: proto.String(friend.String()), ConversationTimestamp: proto.Uint64(1_700_000_002), UnreadCount: proto.Uint32(2),
+			Messages: []*waHistorySync.HistorySyncMsg{{Message: webMessage(friend, "H2", false, 1_700_000_002)}, {Message: webMessage(friend, "H1", true, 1_700_000_001)}}},
+		{ID: proto.String(group.String()), ConversationTimestamp: proto.Uint64(1_700_000_100)},
+		{ID: proto.String(status.String()), ConversationTimestamp: proto.Uint64(1_700_000_200),
+			Messages: []*waHistorySync.HistorySyncMsg{{Message: webMessage(status, "S1", false, 1_700_000_200)}}},
+	}}})
+
+	// Connected: the phone is asked for what came before the chat's oldest message. The group has no message to
+	// start from, and status updates aren't asked for.
+	b.handle(&events.Connected{})
+	if got := asked.next(t); got.Chat != friend || got.ID != "H1" || !got.IsFromMe || got.Timestamp.Unix() != 1_700_000_001 {
+		t.Fatalf("asked before %+v", got)
+	}
+	b.handle(&events.Disconnected{})
+	asked.none(t)
+
+	// Unanswered, it isn't asked again until askAgain has passed.
+	b.backfill(context.Background())
+	asked.none(t)
+
+	// The answer brings older messages, keeps the unread count, and the next request starts from them.
+	for {
+		var c chat
+		r.nextOf(t, "chat", &c)
+		if c.JID == status.String() {
+			break
+		}
+	}
+	b.handle(onDemand(friend, webMessage(friend, "H0", false, 1_700_000_000)))
+	var c chat
+	r.nextOf(t, "chat", &c)
+	if c.JID != friend.String() || c.Unread != -1 {
+		t.Fatalf("answer's chat = %+v", c)
+	}
+	var m message
+	r.nextOf(t, "message", &m)
+	if m.ID != "H0" || !m.History {
+		t.Fatalf("answer's message = %+v", m)
+	}
+	b.backfill(context.Background())
+	if got := asked.next(t); got.ID != "H0" {
+		t.Fatalf("asked before %s", got.ID)
+	}
+
+	// An answer with nothing older ends the chat's history.
+	b.handle(onDemand(friend))
+	b.backfill(context.Background())
+	asked.none(t)
+}
+
+func TestHistoryRequestsStopAtTheCapAndAfterUnansweredOnes(t *testing.T) {
+	b, _, _ := open(t)
+	pairOffline(t, b)
+	asked := make(asks, 8)
+	b.requestHistory = func(_ context.Context, before *types.MessageInfo, _ int) error {
+		asked <- before
+		return nil
+	}
+	b.wait = func(ctx context.Context, _ time.Duration) bool { return ctx.Err() == nil }
+	b.handle(incoming("A1", friend, friend, &waE2E.Message{Conversation: proto.String("synthetic")}))
+	for i := 0; i < maxUnanswered; i++ {
+		b.backfill(context.Background())
+		if got := asked.next(t); got.ID != "A1" {
+			t.Fatalf("asked before %s", got.ID)
+		}
+		// The phone stays silent past askAgain.
+		if _, err := b.db.Exec(`UPDATE bridge_history SET asked_at = ?`, time.Now().Add(-askAgain-time.Minute).UnixMilli()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b.backfill(context.Background())
+	asked.none(t)
+
+	if _, err := b.db.Exec(`UPDATE bridge_history SET unanswered = 0, count = ?`, backfillCap); err != nil {
+		t.Fatal(err)
+	}
+	b.backfill(context.Background())
+	asked.none(t)
+}

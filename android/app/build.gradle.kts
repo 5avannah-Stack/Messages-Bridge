@@ -20,8 +20,8 @@ android {
         // 29 is the default for T's apps (`phone-apps`). Newer APIs sit behind `Build.VERSION.SDK_INT` checks.
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
     }
 
     signingConfigs {

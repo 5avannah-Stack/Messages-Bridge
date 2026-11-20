@@ -107,11 +107,15 @@ func (b *Bridge) handle(evt any) {
 		b.emit("pair_failed", pairFailed{Error: v.Error.Error()})
 	case *events.Connected:
 		b.emit("state", state{State: "connected"})
+		b.startBackfill()
 	case *events.Disconnected:
+		b.stopBackfill()
 		b.emit("state", state{State: "disconnected"})
 	case *events.LoggedOut:
+		b.stopBackfill()
 		b.emit("state", state{State: "logged_out", Reason: v.Reason.String()})
 	case *events.StreamReplaced:
+		b.stopBackfill()
 		// Another client took over this device's session; reconnecting would just fight it.
 		b.emit("state", state{State: "replaced"})
 	case *events.Message:
@@ -121,7 +125,10 @@ func (b *Bridge) handle(evt any) {
 			b.emit("read", read{Chat: v.Chat.String(), ID: v.MessageIDs[len(v.MessageIDs)-1]})
 		}
 	case *events.HistorySync:
-		b.onHistory(v.Data.GetConversations())
+		b.mu.Lock()
+		b.historyAt = time.Now()
+		b.mu.Unlock()
+		b.onHistory(v.Data.GetConversations(), v.Data.GetSyncType() == waHistorySync.HistorySync_ON_DEMAND)
 	}
 }
 
@@ -142,14 +149,16 @@ func (b *Bridge) onMessage(v *events.Message, history bool) {
 		}
 	}
 	m.Media = downloadable != nil && !history
+	b.noteMessage(m, v.Info.Chat)
 	b.emit("message", m)
 	if m.Media {
 		go b.fetchMedia(m, downloadable)
 	}
 }
 
-// onHistory stores the chats a history sync carries, with their messages. History replaces the unread count.
-func (b *Bridge) onHistory(conversations []*waHistorySync.Conversation) {
+// onHistory stores the chats a history sync carries, with their messages. The sync after pairing replaces the unread
+// count; an answer to the bridge's own request (onDemand, backfill.go) carries older messages and keeps it.
+func (b *Bridge) onHistory(conversations []*waHistorySync.Conversation, onDemand bool) {
 	for _, c := range conversations {
 		jid, err := types.ParseJID(c.GetID())
 		if err != nil || c.GetID() == "" {
@@ -162,14 +171,21 @@ func (b *Bridge) onHistory(conversations []*waHistorySync.Conversation) {
 		if name == "" && jid.Server != types.GroupServer {
 			name = b.nameOf(jid)
 		}
+		unread := int(c.GetUnreadCount())
+		if onDemand {
+			unread = -1
+		}
+		lastMs := int64(c.GetConversationTimestamp()) * 1000
 		b.emit("chat", chat{
 			JID:    jid.String(),
 			Name:   name,
 			Phone:  b.phoneOf(context.Background(), jid),
 			Group:  jid.Server == types.GroupServer,
-			LastMs: int64(c.GetConversationTimestamp()) * 1000,
-			Unread: int(c.GetUnreadCount()),
+			LastMs: lastMs,
+			Unread: unread,
 		})
+		b.noteActivity(jid, lastMs)
+		before := b.oldest(jid)
 		for _, hm := range c.GetMessages() {
 			web := hm.GetMessage()
 			if web == nil {
@@ -180,6 +196,9 @@ func (b *Bridge) onHistory(conversations []*waHistorySync.Conversation) {
 				continue
 			}
 			b.onMessage(evt, true)
+		}
+		if onDemand {
+			b.noteAnswer(jid, b.oldest(jid) == before)
 		}
 	}
 }

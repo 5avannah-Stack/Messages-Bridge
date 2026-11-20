@@ -47,6 +47,11 @@ type Bridge struct {
 	cookies    *cookies.Cookies
 	self       int64 // the person's messaging id (FBID), which their own messages carry as sender
 	connCancel context.CancelFunc
+
+	inboxAt     time.Time // when the inbox's first page was last read
+	backfilling bool      // a history pass is running (backfill.go)
+
+	pace func(ctx context.Context) bool // waits between history requests; tests replace it
 }
 
 var (
@@ -66,7 +71,9 @@ type client interface {
 	SetEventHandler(handler func(context.Context, slidetypes.ClientEvent) error)
 	Connect(ctx context.Context)
 	Disconnect()
+	GetMailbox(ctx context.Context) (*slidetypes.MailboxResponse, error)
 	GetThread(ctx context.Context, req *slidetypes.GetThreadInfoRequest) (*slidetypes.ThreadInfoResponse, error)
+	PaginateMessages(ctx context.Context, req *slidetypes.PaginateMessagesRequest) (*slidetypes.PaginateMessagesResponse, error)
 	SendMessage(ctx context.Context, req *slidetypes.SendTextRequest) (*slidetypes.SendTextResponse, error)
 	SendMedia(ctx context.Context, req *slidetypes.SendMediaRequest) (*slidetypes.SendMediaResponse, error)
 	MarkRead(ctx context.Context, req *slidetypes.MarkReadRequest) (*slidetypes.MarkReadResponse, error)
@@ -88,7 +95,7 @@ func Open(dir string, listener Listener) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &Bridge{db: db, listener: listener, mediaDir: mediaDir}
+	b := &Bridge{db: db, listener: listener, mediaDir: mediaDir, pace: pace}
 	if err := b.createTables(); err != nil {
 		db.Close()
 		return nil, err
@@ -175,7 +182,7 @@ func loginError(err error) error {
 }
 
 // Connect opens Instagram's socket and returns; "state" events follow. A session with a saved position picks up
-// where it left off; one without loads the inbox first.
+// where it left off; one without loads the inbox first. History is read in the background meanwhile (backfill.go).
 func (b *Bridge) Connect() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -214,6 +221,7 @@ func (b *Bridge) run(ctx context.Context, cli client) {
 		b.onMailbox(mailbox)
 	}
 	if ctx.Err() == nil {
+		go b.backfill(ctx, cli)
 		cli.Connect(ctx)
 	}
 }
@@ -243,9 +251,9 @@ func (b *Bridge) Close() error {
 func (b *Bridge) Logout() error {
 	b.Disconnect()
 	b.mu.Lock()
-	b.cli, b.cookies, b.self = nil, nil, 0
+	b.cli, b.cookies, b.self, b.inboxAt = nil, nil, 0, time.Time{}
 	b.mu.Unlock()
-	_, err := b.db.Exec(`DELETE FROM bridge_meta; DELETE FROM bridge_thread;`)
+	_, err := b.db.Exec(`DELETE FROM bridge_meta; DELETE FROM bridge_thread; DELETE FROM bridge_backfill;`)
 	return err
 }
 
@@ -261,8 +269,9 @@ func (b *Bridge) client() (client, int64) {
 	return b.cli, b.self
 }
 
-// The bridge's own rows: the session and the client's position (bridge_meta), and each thread's ids, which Instagram
-// spreads over three numbers that different calls want (bridge_thread).
+// The bridge's own rows: the session and the client's position (bridge_meta), each thread's ids, which Instagram
+// spreads over three numbers that different calls want (bridge_thread), and how far each thread's history has been
+// read (bridge_backfill, backfill.go).
 const (
 	metaCookies  = "cookies"
 	metaSelf     = "self"
@@ -280,6 +289,14 @@ func (b *Bridge) createTables() error {
 			long_id  TEXT NOT NULL DEFAULT '',
 			key      INTEGER NOT NULL DEFAULT 0,
 			last_msg TEXT NOT NULL DEFAULT ''
+		);
+		CREATE TABLE IF NOT EXISTS bridge_backfill (
+			id       TEXT PRIMARY KEY,
+			activity INTEGER NOT NULL DEFAULT 0, -- the thread's last activity, in ms
+			newest   INTEGER NOT NULL DEFAULT 0, -- the newest message reported, in ms
+			count    INTEGER NOT NULL DEFAULT 0, -- messages read from history pages
+			cursor   TEXT NOT NULL DEFAULT '',   -- where the next older page starts
+			more     INTEGER NOT NULL DEFAULT 1  -- older pages are left
 		);`)
 	if err != nil {
 		return fmt.Errorf("bridge tables: %w", err)
