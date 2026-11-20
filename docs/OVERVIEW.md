@@ -37,9 +37,9 @@ Otherwise it disconnects and shows as asleep. Muted chats wait for the catch-up.
 ## WhatsApp
 
 A linked device on [whatsmeow](https://github.com/tulir/whatsmeow), as in Messages' spike
-(`docs/spikes/wa-phone-bridge.md` there). The Go module in `networks/whatsapp` wraps it; Gradle builds it into an AAR
-with gomobile (`whatsappAar`), and `WhatsAppConnector` speaks to it. Events cross as JSON (`events.go`,
-`WhatsAppEvents.kt`).
+(`docs/spikes/wa-phone-bridge.md` there). The package `networks/whatsapp` wraps it, and `WhatsAppConnector` speaks to
+it. Events cross as JSON (`events.go`, `WhatsAppEvents.kt` and `GoEvents.kt`, which reads the chats and messages of
+every Go network).
 
 - **Login:** `phone` asks for the number, then shows the 8-character code the person types into WhatsApp under Linked
   devices; `qr` shows a QR code that renews until scanned. The device shows in WhatsApp as "Chrome (Linux)" from
@@ -53,6 +53,37 @@ with gomobile (`whatsappAar`), and `WhatsAppConnector` speaks to it. Events cros
 - **Read:** read receipts go out for others' messages; reads on the person's other devices clear the chat here.
 - **Store:** whatsmeow's keys and sessions in `wa.db` (pure-Go SQLite, modernc), in the network's folder.
 
+## Signal
+
+A linked device on signalmeow, the Signal client inside [mautrix-signal](https://github.com/mautrix/signal), used
+without its Matrix layer (`DECISIONS.md`, Signal). The package `networks/signalbridge` wraps it, and `SignalConnector`
+speaks to it, the same way as WhatsApp. signalmeow does Signal's cryptography through libsignal, Signal's Rust library,
+which `networks/libsignal.sh` builds for each ABI at the version mautrix-signal needs
+(`signalbridge/libsignal.version`).
+
+- **Login:** `qr` only, as Signal allows. Messages shows the code and the person scans it with Signal on their phone,
+  under Settings › Linked devices › Link a new device. The code renews every 45 seconds, up to 20 times. The device
+  shows in Signal as "Messages".
+  **Limitation:** the code has to be scanned by Signal on another phone. Signal on the phone that shows the code can't
+  scan its own screen, and its `sgnl://linkdevice` link drops the code it carries. So a person whose Signal account
+  lives on this same phone can't link it here; the bridge's Signal is for an account whose main phone is a different
+  one.
+- **History:** while linking, Signal asks the person whether to transfer their message history. If they agree, the
+  phone uploads an archive, and the bridge waits for it (up to an hour, while connected) and adds each chat's newest
+  1,000 messages as history; media in it isn't downloaded. If they don't, chats start with what arrives live.
+- **Receiving:** text, long texts (over 2 KiB, which Signal sends as an attachment), images, video, audio, voice notes,
+  files and stickers, with replies' targets. A message with several attachments arrives as one message per attachment,
+  the text on the first. Contacts, polls and payments show as a line saying what they are. Reactions, edits, deletes,
+  calls and view-once opens are skipped for now. A person's chat takes their name from the person's contacts or their
+  Signal profile; a group its title.
+- **Sending:** text, replies, and images, video, audio, voice notes and files up to 100 MB. Signal plays voice notes only
+  as AAC, so a voice note in another format arrives as audio. Signal doesn't echo what this device sends, so the
+  connector adds the sent message to history itself.
+- **Read:** reading up to a message sends read receipts to each sender for every unread message before it; the bridge
+  keeps the others' unread messages in `bridge_unread` for that. Reads on the person's other devices clear the chat
+  here.
+- **Store:** signalmeow's keys, sessions and contacts in `signal.db`, in the network's folder.
+
 ## Licences
 
 The app is AGPL-3.0-only; `android/contract` is MIT so Messages can copy it. Every Go module linked into the app:
@@ -61,9 +92,12 @@ The app is AGPL-3.0-only; `android/contract` is MIT so Messages can copy it. Eve
 |---|---|
 | go.mau.fi/whatsmeow, go.mau.fi/util | MPL-2.0 |
 | go.mau.fi/libsignal | GPL-3.0 |
-| github.com/beeper/argo-go, dustin/go-humanize, elliotchance/orderedmap, mattn/go-colorable, mattn/go-isatty, rs/zerolog, vektah/gqlparser | MIT |
+| go.mau.fi/mautrix-signal | AGPL-3.0 |
+| github.com/beeper/argo-go, dustin/go-humanize, elliotchance/orderedmap, mattn/go-colorable, mattn/go-isatty, rs/zerolog, tidwall/gjson, tidwall/match, tidwall/pretty, vektah/gqlparser | MIT |
 | github.com/coder/websocket | ISC |
 | github.com/google/uuid, remyoudompheng/bigfft, filippo.io/edwards25519, golang.org/x/*, google.golang.org/protobuf, modernc.org/* | BSD-3 |
-| github.com/petermattis/goid | Apache-2.0 |
+| github.com/petermattis/goid, google.golang.org/grpc, google.golang.org/genproto | Apache-2.0 |
 
-GPL-3.0 and AGPL-3.0 code may be combined (section 13 of each). Android libraries: AndroidX (Apache-2.0).
+libsignal (`signalapp/libsignal`, AGPL-3.0) is linked as a static library, with its Rust crates and BoringSSL; their
+licences are listed in its `acknowledgments` folder. GPL-3.0 and AGPL-3.0 code may be combined (section 13 of each).
+Android libraries: AndroidX (Apache-2.0).

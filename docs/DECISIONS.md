@@ -20,4 +20,15 @@
 - Noir, as Messages.
 - WhatsApp's store uses modernc's pure-Go SQLite, which builds and tests the same everywhere; mattn's cgo SQLite is smaller (about 0.9 MB) and stays a build tag (`cgosqlite`) until its tests run on the PC.
 - Media from WhatsApp's history sync isn't downloaded; only live media is.
+- **Signal on signalmeow**, mautrix-signal's Go client, without its Matrix layer, rather than libsignal's Java bindings
+  with a Signal service client. signalmeow is a whole client (linking, Signal's two sockets, sealed sender, groups,
+  attachments, contact and storage sync, the history transfer) kept current with Signal's servers by whatsmeow's
+  maintainer, so the connector is the same thin Go wrapper as WhatsApp's, in the same gomobile AAR and Go runtime.
+  The Java route has libsignal's Android library but no maintained service client to go with it: Signal-Android's
+  isn't published, and signal-cli's fork is unofficial and built for desktops, so the bridge would own the key stores,
+  the receive loop and every protocol change. The cost: libsignal's Rust is cross-compiled for each ABI
+  (`networks/libsignal.sh`, needing rustup, protoc, CMake and libclang), at the version mautrix-signal pins, and the
+  release APK grows from 8.4 to 16.3 MB.
+- Signal links only by a QR code scanned with Signal on another phone (`OVERVIEW.md`, Signal), so the bridge's Signal
+  serves accounts whose main phone isn't the one running Messages.
 - Staying connected (from the WhatsApp spike): wake on the network's own notification, a half-hourly catch-up, and connected while Messages is on screen; no permanent foreground service.

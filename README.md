@@ -9,7 +9,7 @@ Messages shows everything; this app has only a status page. Install both from TS
 ## Why a separate app
 
 The network libraries it needs are copyleft: WhatsApp's whatsmeow needs `go.mau.fi/libsignal` (GPL-3.0), Signal's
-libsignal and mautrix-meta's Instagram code are AGPL-3.0. They live here, in the open, and Messages talks to this app
+libsignal and mautrix-signal, and mautrix-meta's Instagram code are AGPL-3.0. They live here, in the open, and Messages talks to this app
 through a small bound service (`docs/CONTRACT.md`). Only interface definitions cross between the two.
 
 ## Layout
@@ -18,15 +18,16 @@ through a small bound service (`docs/CONTRACT.md`). Only interface definitions c
 |---|---|
 | `android/contract` | The contract: AIDL interfaces, parcelables and constants. Messages copies this module. |
 | `android/app` | The bridge app: the service, per-network storage, the wake strategy and the status page. |
-| `networks/whatsapp` | WhatsApp on whatsmeow, a Go module bound into the app with gomobile. |
+| `networks` | The Go module bound into the app with gomobile: `whatsapp` on whatsmeow, `signal` on mautrix-signal's signalmeow, and `libsignal.sh`, which builds Signal's Rust library. |
 | `docs` | `CONTRACT.md`, `OVERVIEW.md`, `DECISIONS.md`, `CFLS.md`. |
 
 ## Building
 
-You need JDK 21, the Android SDK with NDK 27, and Go 1.27. The Gradle build compiles the Go module itself.
+You need JDK 21, the Android SDK with NDK 27 and CMake, Go 1.27, rustup, protoc and libclang (for libsignal's BoringSSL bindings). The Gradle build compiles libsignal
+and the Go module itself.
 
 ```sh
-cd networks/whatsapp && go test ./...
+cd networks && ./libsignal.sh host && go test ./...
 cd android && ./gradlew testDebugUnitTest assembleDebug
 ```
 

@@ -50,7 +50,7 @@ type qrDone struct {
 }
 
 type chat struct {
-	JID    string `json:"jid"`
+	JID    string `json:"id"`
 	Name   string `json:"name,omitempty"`
 	Phone  string `json:"phone,omitempty"` // digits, when WhatsApp has told us the number behind a LID
 	Group  bool   `json:"group"`
