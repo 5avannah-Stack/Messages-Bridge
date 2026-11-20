@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="no_networks">Tahle verze nemá žádnou síť</string>
+    <string name="state_logged_out">Nepřihlášeno · přihlas se v Messages</string>
+    <string name="state_connecting">Připojuji…</string>
+    <string name="state_connected">Připojeno</string>
+    <string name="state_sleeping">Spí, dokud nepřijde zpráva</string>
+    <string name="state_transient">Spojení se ztratilo, zkouším to znovu</string>
+    <string name="state_bad_credentials">Síť tě odhlásila · přihlas se znovu v Messages</string>
+    <string name="state_error">Něco se pokazilo</string>
+
+    <string name="messages_missing">Není nainstalované · stáhni si ho z TStore</string>
+    <string name="messages_foreign">Tahle kopie Messages není podepsaná autorem, takže s ní most mluvit nebude</string>
+    <string name="messages_ready">Připraveno</string>
+    <string name="messages_attached">Připojeno</string>
+
+    <string name="wake_title">Probouzení oznámeními</string>
+    <string name="wake_on">Zapnuto</string>
+    <string name="wake_off">Vypnuto · nové zprávy dorazí jen každou půlhodinu</string>
+    <string name="wake_allow">Povolit</string>
+
+    <string name="source">Zdrojový kód</string>
+</resources>

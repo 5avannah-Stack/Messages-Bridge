@@ -8,6 +8,8 @@
 
 ## Open
 
+- Whether the bridge hides WhatsApp's (and later Signal's and Instagram's) own notifications once Messages shows the same message. It doesn't now: the notification listener only reads which app posted.
+- An opt-in "always connected" mode (a `remoteMessaging` foreground service) for people without the network's app on the phone. Not built.
 - Encrypting each network's store at rest (SQLCipher or a Keystore-wrapped key). Android's file-based encryption covers a locked phone; a store copied off an unlocked, rooted phone would let someone read and send as the person.
 
 ## Defaults until told otherwise
@@ -16,3 +18,4 @@
 - Package `cz.teous.messages.bridge`, `minSdk` 29, with its own signing key.
 - One branch, `main`, and full releases, since Messages' betas don't need a bridge beta yet.
 - Noir, as Messages.
+- Staying connected (from the WhatsApp spike): wake on the network's own notification, a half-hourly catch-up, and connected while Messages is on screen; no permanent foreground service.

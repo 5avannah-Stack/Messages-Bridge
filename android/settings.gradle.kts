@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Messages-Bridge"
-include(":contract")
+include(":contract", ":app")

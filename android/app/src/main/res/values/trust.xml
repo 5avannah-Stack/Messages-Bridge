@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Messages certificates the bridge trusts (SHA-256, hex): the knownSigner permission and the code check both
+     read this list. Keep it equal to BridgeContract.MESSAGES_CERT_SHA256. -->
+<resources>
+    <string-array name="trusted_callers" translatable="false">
+        <item>6361ec9efb37a88465baddf9a8e5968760d1da12bb95969df79b35019eb42f25</item>
+    </string-array>
+</resources>
