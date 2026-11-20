@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "projectName": "Messages Bridge",
+  "repositoryName": "Messages-Bridge",
+  "clinch": {
+    "boardId": "brd_msswd13i7e84fbd8",
+    "boardTitle": "Personal",
+    "projectId": "prj_mwoyu1sqd1ac0d3b",
+    "projectTitle": "Messages Bridge",
+    "stageId": "lst_msswdjax74102c8f",
+    "stageTitle": "Doing"
+  },
+  "github": {
+    "owner": "5avannah-Stack",
+    "repository": "Messages-Bridge",
+    "private": false,
+    "license": "AGPL-3.0-only",
+    "webUrl": "https://github.com/5avannah-Stack/Messages-Bridge"
+  },
+  "forgejo": {
+    "enabled": true,
+    "organization": "Teous",
+    "sshUrl": "ssh://git@teous-server.taild9fd95.ts.net:2222/Teous/Messages-Bridge.git",
+    "webUrl": "https://teous-server.taild9fd95.ts.net:10000/Teous/Messages-Bridge",
+    "role": "Backup, updated daily from GitHub by ~/scheduler/jobs/github-backup.sh. GitHub is the home."
+  },
+  "storage": {
+    "activePath": "/data/Archive/01 Personal/04 Projects/01 Apps/Messages Bridge",
+    "nasProjectPath": "\\\\192.168.0.185\\Archive\\01 Personal\\04 Projects\\01 Apps\\Messages Bridge"
+  },
+  "backup": {
+    "latestPath": "Backups/Latest",
+    "releasePath": "Backups/Releases",
+    "milestonePath": "Backups/Milestones",
+    "milestoneRetention": 5,
+    "keepAllReleases": true,
+    "lastSuccessfulAt": null
+  }
+}

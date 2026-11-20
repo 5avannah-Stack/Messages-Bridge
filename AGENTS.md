@@ -1,0 +1,18 @@
+Agents working for T: fetch the global working agreement from SkillBase (`get_agents_md`) first.
+
+# Messages Bridge project rules
+
+- Read `.teous-project.json` first, then `docs/DECISIONS.md` before changing direction.
+- This app is the open-source half of Messages (`../Messages`, closed source). It runs WhatsApp, Signal and Instagram on the person's own phone and hands their chats to Messages over the bound service in `docs/CONTRACT.md`. It carries GPL-3.0 and AGPL-3.0 code, so it lives here and never inside Messages. Messages keeps every screen; this app has only its status page.
+- The contract is the boundary. Only the files in `android/contract/` cross into Messages, and they hold interface definitions and constants, never bridge code. A change to them follows `docs/CONTRACT.md`, Changing the contract, and goes into Messages' copy in the same day; tell the Messages agent.
+- Clinch: board Personal, card Messages Bridge. Delivery: feature branch, PR on GitHub (`5avannah-Stack/Messages-Bridge`, public, AGPL-3.0), squash-merge with `gh pr merge --squash --match-head-commit <sha>`, releases there too. Forgejo `Teous/Messages-Bridge` is the backup, updated nightly from GitHub by the `github-backup` job in the T3 scheduler. Don't push to it by hand. Commit as `T.Jungwiert <220191455+Tjw256@users.noreply.github.com>`, with no agent signatures or co-author footers.
+- One branch, `main`, with full releases. No release until Messages talks to the bridge. Releases reach phones through TStore, listed together with Messages, since people need both.
+- Keep `docs/OVERVIEW.md`, `docs/CFLS.md` and `docs/CONTRACT.md` current in the same PR as any behaviour change.
+- Refresh `Backups/Latest` after each release and meaningful milestone with `~/tools/bin/release-snap`, following the `new-project` skill's backup rules. Add a snapshot under `Backups/Releases` for every release.
+- UI follows `teodor-taste` and `phone-apps`, in liquid glass's Noir theme, as Messages. The kit's `compose/liquid` is copied unchanged into `android/app/src/main/kotlin/cz/teous/liquid/`. Update it by copying the kit again, never by editing the copy.
+- Czech and English for everything on screen and in notifications (`values/strings.xml`, `values-cs/strings.xml`).
+- Never pair with a real account, and never use real contacts, messages, phone numbers or call history in tests, fixtures, logs or commits. Use synthetic data: numbers under the `+1 000` prefix, which no real line has. A real test account needs T's test number.
+- The bridge never logs message text, numbers or names.
+- Package `cz.teous.messages.bridge`, signed with its own key from `Backups/Release Signing/` in this folder. Never commit it. Its certificate digest and Messages' are in `android/contract/.../BridgeContract.kt`; a new key on either side breaks the trust between the apps until both are updated.
+- Build Android on Teodor-PC. When it's off, build on Teous Server as the fallback, one build at a time through `~/tools/bin/build-lock` and always with `--no-daemon`, run outside the sandbox: `~/tools/bin/build-lock "messages-bridge build" bash -c 'cd android && JAVA_HOME=~/tools/jdk ANDROID_HOME=~/tools/android-sdk PATH=~/tools/go/bin:$PATH ./gradlew --no-daemon testDebugUnitTest lintRelease assembleRelease'`. Go comes from `~/tools/go`; the WhatsApp module builds its gomobile tools from its own `go.mod`. On the PC the project is a clone at `D:\Projects\Messages Bridge`, with Go installed and `ANDROID_HOME` set for the session; copy `Backups/Release Signing/` from `G:` into the clone for a release build, then delete it.
+- Go tests: `cd networks/whatsapp && go test ./...` with Go from `~/tools/go`.
