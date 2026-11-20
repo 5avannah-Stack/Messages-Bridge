@@ -66,6 +66,32 @@ class ParcelTest {
     }
 
     @Test
+    fun cookieStepRoundTrips() {
+        val step = LoginStep().apply {
+            type = LoginStep.TYPE_COOKIES
+            loginId = "login"
+            stepId = "cookies"
+            network = BridgeContract.INSTAGRAM
+            url = "https://www.instagram.com/accounts/login/"
+            cookieFields = arrayOf(CookieField().apply {
+                id = "sessionid"
+                required = true
+                source = CookieField.SOURCE_COOKIE
+                name = "sessionid"
+                domain = "instagram.com"
+            })
+            waitForUrl = "^https://www\\.instagram\\.com/$"
+        }
+        val p = Parcel.obtain()
+        step.writeToParcel(p, 0)
+        p.setDataPosition(0)
+        val back = LoginStep.CREATOR.createFromParcel(p)
+        p.recycle()
+        assertEquals("^https://www\\.instagram\\.com/$", back.waitForUrl)
+        assertEquals("instagram.com", back.cookieFields?.single()?.domain)
+    }
+
+    @Test
     fun hexDecodesDigests() {
         assertArrayEquals(byteArrayOf(0x60, 0xec.toByte(), 0x6c), BridgeContract.hex("60ec6c"))
         assertEquals(32, BridgeContract.hex(BridgeContract.BRIDGE_CERT_SHA256).size)

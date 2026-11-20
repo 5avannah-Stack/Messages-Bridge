@@ -3,7 +3,7 @@
 Messages binds to the bridge's service and does everything through one AIDL interface, `IBridge`, and one callback,
 `IBridgeListener`. Both live in `android/contract`, with the parcelables they pass and `BridgeContract.kt`'s names and
 keys. That module is MIT-licensed and holds only interface definitions and constants, so Messages copies it unchanged
-and stays free of the bridge's GPL code. Contract version: **1**.
+and stays free of the bridge's GPL code. Contract version: **2**.
 
 It is network-agnostic and modelled loosely on mautrix bridgev2's provisioning API: networks offer login flows, a login
 walks through steps, and each network's account has a bridge state. WhatsApp, Signal and Instagram all fit it; a network
@@ -64,9 +64,11 @@ Calls block and may wait on the network, so Messages makes them off the main thr
 A login is a series of `LoginStep`s, as bridgev2's:
 
 - `TYPE_USER_INPUT`: draw `fields` and `submitLogin` the values.
-- `TYPE_COOKIES`: open `url` in a WebView with `userAgent`, let the person log in on the network's page, collect each
-  `CookieField` (a cookie on `domain`, a local-storage key or a request header), run `extractJs` if set, and
-  `submitLogin` them.
+- `TYPE_COOKIES`: open `url` in a WebView with `userAgent`, let the person log in on the network's page, and once the
+  page's URL matches `waitForUrl` (a regular expression; null means at once) and every required `CookieField` is there
+  (a cookie on `domain`, a local-storage key or a request header), run `extractJs` if set and `submitLogin` them. Watch
+  the URL on every navigation, including ones that don't load a page, since Instagram moves within the page. Clear the
+  WebView's cookies and storage before and after.
 - `TYPE_DISPLAY`: show `displayData` as a QR code (`DISPLAY_QR`) or a code to type on the other device (`DISPLAY_CODE`),
   or only the instructions (`DISPLAY_NOTHING`), and wait. The step changes by itself: a renewed QR code, success or
   failure arrive as `TYPE_LOGIN` events with the same `loginId`.
@@ -78,7 +80,8 @@ field types, in the person's language.
 WhatsApp offers `phone` (USER_INPUT for the number, then DISPLAY_CODE with the 8-character pairing code the person
 types into WhatsApp under Linked devices) and `qr` (DISPLAY_QR, renewed every 20 seconds or so). Signal offers only
 `qr` (DISPLAY_QR, an `sgnl://linkdevice` link renewed every 45 seconds), which Signal on another phone has to scan
-(`OVERVIEW.md`, Signal).
+(`OVERVIEW.md`, Signal). Instagram offers `cookies` (TYPE_COOKIES on Instagram's login page, with `waitForUrl`), then
+TYPE_COMPLETE, or TYPE_FAILED with Instagram's reason, such as a check to pass in Instagram first.
 
 ### Sending
 
@@ -128,4 +131,5 @@ Messages should unbind when it leaves the screen and its work is done, or the br
 - **Never** reorder, remove or retype a method or a field, or reuse a constant's value.
 - **Breaking** changes get a new interface (`IBridge2`) and bind action beside the old ones, kept until every Messages in
   TStore uses the new one. `minClientVersion` lets the bridge send an old Messages to update.
+- Version 2 added `LoginStep.waitForUrl`.
 - A change lands in this repo and in Messages' copy (`android/app/src/main/aidl` and the Kotlin file) on the same day.

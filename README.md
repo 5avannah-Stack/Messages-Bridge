@@ -18,7 +18,7 @@ through a small bound service (`docs/CONTRACT.md`). Only interface definitions c
 |---|---|
 | `android/contract` | The contract: AIDL interfaces, parcelables and constants. Messages copies this module. |
 | `android/app` | The bridge app: the service, per-network storage, the wake strategy and the status page. |
-| `networks` | The Go module bound into the app with gomobile: `whatsapp` on whatsmeow, `signal` on mautrix-signal's signalmeow, and `libsignal.sh`, which builds Signal's Rust library. |
+| `networks` | The Go module bound into the app with gomobile: `whatsapp` on whatsmeow, `signalbridge` on mautrix-signal's signalmeow, `instagram` on mautrix-meta's instameow, and `libsignal.sh`, which builds Signal's Rust library. |
 | `docs` | `CONTRACT.md`, `OVERVIEW.md`, `DECISIONS.md`, `CFLS.md`. |
 
 ## Building

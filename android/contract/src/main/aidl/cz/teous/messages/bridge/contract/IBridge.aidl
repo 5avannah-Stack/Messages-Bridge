@@ -19,7 +19,7 @@ import cz.teous.messages.bridge.contract.SendRequest;
  * network that can't do it UnsupportedOperationException. Calls may block on the network: never on the main thread.
  */
 interface IBridge {
-    const int VERSION = 1;
+    const int VERSION = 2;
 
     BridgeInfo info();
     NetworkInfo[] networks();

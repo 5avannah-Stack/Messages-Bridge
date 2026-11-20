@@ -45,4 +45,9 @@ parcelable LoginStep {
     // TYPE_COMPLETE: the account now logged in. TYPE_FAILED: why, for the person to read.
     @nullable String accountId;
     @nullable String error;
+
+    // Since contract version 2. TYPE_COOKIES: a regular expression the page's URL matches once the person is logged in;
+    // the cookies go to submitLogin only then, even if some of them are set earlier. Null: as soon as the required
+    // ones are there.
+    @nullable String waitForUrl;
 }

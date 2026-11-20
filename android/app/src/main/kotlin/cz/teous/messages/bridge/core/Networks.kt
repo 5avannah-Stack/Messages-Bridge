@@ -1,6 +1,7 @@
 package cz.teous.messages.bridge.core
 
 import cz.teous.messages.bridge.contract.BridgeContract
+import cz.teous.messages.bridge.instagram.InstagramConnector
 import cz.teous.messages.bridge.signal.SignalConnector
 import cz.teous.messages.bridge.whatsapp.WhatsAppConnector
 
@@ -9,5 +10,6 @@ object Networks {
     val factories: Map<String, ConnectorFactory> = linkedMapOf(
         BridgeContract.WHATSAPP to ConnectorFactory(::WhatsAppConnector),
         BridgeContract.SIGNAL to ConnectorFactory(::SignalConnector),
+        BridgeContract.INSTAGRAM to ConnectorFactory(::InstagramConnector),
     )
 }

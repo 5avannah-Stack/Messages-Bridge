@@ -5,8 +5,8 @@ import cz.teous.messages.bridge.contract.Message
 import org.json.JSONObject
 
 /**
- * Reads the chats and messages the Go networks (networks/whatsapp, networks/signalbridge) write as JSON into the
- * contract's types. Both write the same shape; each network's own events (state, login) stay in its connector.
+ * Reads the chats and messages the Go networks (networks/whatsapp, signalbridge and instagram) write as JSON into the
+ * contract's types. All write the same shape; each network's own events (state, login) stay in its connector.
  */
 internal object GoEvents {
     fun chat(network: String, json: JSONObject, endToEnd: Boolean) = Chat().apply {

@@ -9,3 +9,7 @@ No release yet.
 - Signal: link as a secondary device by QR code (scanned with Signal on another phone), connect, receive text and media,
   send text, replies and media, history from Signal's transfer when the person allows it, read receipts both ways,
   logout.
+- Instagram: log in with Instagram's own page in Messages' WebView, chats with names and handles, receive text, photos,
+  videos, voice notes, GIFs and stickers, send text, replies, photos, videos and voice notes, read receipts both ways,
+  logout.
+- The contract is version 2: a cookie login step says which page means the person is logged in (`waitForUrl`).
