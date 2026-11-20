@@ -29,6 +29,13 @@
   the receive loop and every protocol change. The cost: libsignal's Rust is cross-compiled for each ABI
   (`networks/libsignal.sh`, needing rustup, protoc, CMake and libclang), at the version mautrix-signal pins, and the
   release APK grows from 8.4 to 16.3 MB.
+- **Instagram on instameow**, the Instagram client in mautrix-meta (`pkg/instameow`, with messagix's cookies, sockets
+  and HTTP client), without its Matrix layer. mautrix-meta dropped messagix's Instagram mode in mid-2026 for this new
+  client, so it is the maintained one. It still imports a few of mautrix-go's types (MPL-2.0), which get linked but
+  aren't used here. The login takes the cookies of Instagram's own page, as Messages' server bridge does, rather than
+  a password flow, so Instagram handles two-factor codes and checks itself. That page's "logged in" URL pattern needed
+  a contract field (`LoginStep.waitForUrl`, contract version 2). Reactions aren't shown: the contract has no
+  reactions yet, and adding them is a change in Messages too. The release APK grows from 16.3 to 20.8 MB.
 - Signal links only by a QR code scanned with Signal on another phone (`OVERVIEW.md`, Signal), so the bridge's Signal
   serves accounts whose main phone isn't the one running Messages.
 - Staying connected (from the WhatsApp spike): wake on the network's own notification, a half-hourly catch-up, and connected while Messages is on screen; no permanent foreground service.

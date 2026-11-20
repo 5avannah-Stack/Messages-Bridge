@@ -66,7 +66,7 @@ android {
 }
 
 /*
- * WhatsApp and Signal are packages of the Go module in networks, bound together into one AAR with gomobile, since an
+ * WhatsApp, Signal and Instagram are packages of the Go module in networks, bound together into one AAR with gomobile, since an
  * app can carry only one Go runtime. Go comes from PATH, or from the environment variable GO; gomobile and gobind are
  * built from the module's own go.mod, so their versions are pinned. Signal links libsignal, Signal's Rust library,
  * which networks/libsignal.sh builds first for each target (rustup, protoc and the SDK's CMake). Releases carry arm64
@@ -125,10 +125,10 @@ val networksAar = tasks.register<Exec>("networksAar") {
     environment("ANDROID_NDK_HOME", androidComponents.sdkComponents.ndkDirectory.get().asFile.path)
     environment("GOTOOLCHAIN", "local")
     // -trimpath and -s -w keep build paths and symbols out. Kotlin sees the packages as cz.teous.messages.bridge.go.whatsapp
-    // and cz.teous.messages.bridge.go.signalbridge (gomobile appends each Go package's name).
+    // and so on (gomobile appends each Go package's name).
     commandLine(
         File(bin, "gomobile$exe").path, "bind", "-target=${goTargets.get()}", "-androidapi", "29", "-trimpath", "-ldflags=-s -w",
-        "-javapkg", "cz.teous.messages.bridge.go", "-o", aar.get().asFile.path, "./whatsapp", "./signalbridge",
+        "-javapkg", "cz.teous.messages.bridge.go", "-o", aar.get().asFile.path, "./whatsapp", "./signalbridge", "./instagram",
     )
 }
 

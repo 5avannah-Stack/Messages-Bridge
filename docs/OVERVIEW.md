@@ -84,6 +84,34 @@ which `networks/libsignal.sh` builds for each ABI at the version mautrix-signal 
   here.
 - **Store:** signalmeow's keys, sessions and contacts in `signal.db`, in the network's folder.
 
+## Instagram
+
+The person's own Instagram web session on instameow, the Instagram client inside
+[mautrix-meta](https://github.com/mautrix/meta), used without its Matrix layer (`DECISIONS.md`, Instagram). The
+package `networks/instagram` wraps it, and `InstagramConnector` speaks to it. Instagram's DMs aren't end-to-end
+encrypted: Meta removed the opt-in encryption on 8 May 2026, so the chats show as not encrypted.
+
+- **Login:** `cookies`. Messages opens Instagram's login page (`https://www.instagram.com/accounts/login/`) in its
+  WebView, where Instagram itself handles two-factor codes and checks, and once the page reaches the inbox or feed
+  (`waitForUrl`) sends its cookies: `sessionid`, `csrftoken` and `ds_user_id`, and `rur`, `shbid`, `shbts`, `mid` and
+  `ig_did` when set, the same as Messages' server bridge. The bridge checks them by loading the inbox once.
+- **Chats:** the inbox's first page arrives at login, with each person's name and handle or each group's title. A chat
+  first heard of later is looked up when its first message comes. No history of messages: the inbox carries only stubs
+  of them.
+- **Receiving:** text, photos, videos, voice notes, GIFs and stickers, and replies' targets. An album shows its first
+  photo or video with a line saying how many more. View-once photos and videos stay in Instagram; shared posts, reels
+  and links show as a line with their title and link. Reactions, edits, unsends and group changes are skipped: the
+  contract has no reactions yet.
+- **Sending:** text, replies, photos, videos and voice notes up to 100 MB; audio goes as a voice note, files can't go
+  (Instagram doesn't take them), and a caption follows the media as its own text. Instagram echoes what this device
+  sends; the hub keeps the connector's own copy.
+- **Read:** reading up to a message tells Instagram (and so the other side); reads on the person's other devices clear
+  the chat here.
+- **Logout** forgets the session on the phone. Instagram keeps it until it expires or the person ends it under
+  Accounts Center › Password and security › Where you're logged in, as with mautrix-meta.
+- **Store:** the session's cookies, the client's position in Instagram's event stream, and each thread's three ids
+  (Instagram's calls each want a different one) in `instagram.db`, in the network's folder.
+
 ## Licences
 
 The app is AGPL-3.0-only; `android/contract` is MIT so Messages can copy it. Every Go module linked into the app:
@@ -92,11 +120,12 @@ The app is AGPL-3.0-only; `android/contract` is MIT so Messages can copy it. Eve
 |---|---|
 | go.mau.fi/whatsmeow, go.mau.fi/util | MPL-2.0 |
 | go.mau.fi/libsignal | GPL-3.0 |
-| go.mau.fi/mautrix-signal | AGPL-3.0 |
-| github.com/beeper/argo-go, dustin/go-humanize, elliotchance/orderedmap, mattn/go-colorable, mattn/go-isatty, rs/zerolog, tidwall/gjson, tidwall/match, tidwall/pretty, vektah/gqlparser | MIT |
+| go.mau.fi/mautrix-signal, go.mau.fi/mautrix-meta | AGPL-3.0 |
+| maunium.net/go/mautrix, go.mau.fi/zeroconfig | MPL-2.0 (mautrix-meta's Instagram client imports a few of mautrix-go's types) |
+| github.com/beeper/argo-go, beeper/req (a fork of imroc/req), andybalholm/brotli, dustin/go-humanize, elliotchance/orderedmap, icholy/digest, mattn/go-colorable, mattn/go-isatty, quic-go/quic-go, quic-go/qpack, rs/xid, rs/zerolog, tidwall/gjson, tidwall/match, tidwall/pretty, tidwall/sjson, vektah/gqlparser, yuin/goldmark, gopkg.in/natefinch/lumberjack.v2, gopkg.in/yaml.v3 | MIT |
 | github.com/coder/websocket | ISC |
-| github.com/google/uuid, remyoudompheng/bigfft, filippo.io/edwards25519, golang.org/x/*, google.golang.org/protobuf, modernc.org/* | BSD-3 |
-| github.com/petermattis/goid, google.golang.org/grpc, google.golang.org/genproto | Apache-2.0 |
+| github.com/google/uuid, google/go-querystring, beeper/poly1305, klauspost/compress, refraction-networking/utls, remyoudompheng/bigfft, filippo.io/edwards25519, golang.org/x/*, google.golang.org/protobuf, modernc.org/* | BSD-3 |
+| github.com/petermattis/goid, apache/thrift, google/flatbuffers, coreos/go-systemd, google.golang.org/grpc, google.golang.org/genproto | Apache-2.0 |
 
 libsignal (`signalapp/libsignal`, AGPL-3.0) is linked as a static library, with its Rust crates and BoringSSL; their
 licences are listed in its `acknowledgments` folder. GPL-3.0 and AGPL-3.0 code may be combined (section 13 of each).
